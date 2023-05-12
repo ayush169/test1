@@ -103,7 +103,7 @@ const resolvers = {
       return deletedUsers[0];
     },
 
-    createPost: (parent, { data }, { db }, info) => {
+    createPost: (parent, { data }, { db, pubsub }, info) => {
       const userExists = db.usersData.some((u) => u.id === data.author);
       if (!userExists) {
         throw new Error("user does not exist");
@@ -113,11 +113,20 @@ const resolvers = {
         ...data,
       };
       db.postsData.push(post);
+      if (data.published) {
+        pubsub.publish("post", {
+          post: {
+            mutation: "CREATED",
+            data: post,
+          },
+        });
+      }
       return post;
     },
 
-    updatePost: (parent, { id, data }, { db }, info) => {
+    updatePost: (parent, { id, data }, { db, pubsub }, info) => {
       const post = db.postsData.find((p) => p.id === id);
+      const originalPost = { ...post };
       if (!post) {
         throw new Error("post does not exist!");
       }
@@ -130,12 +139,42 @@ const resolvers = {
       }
       if (typeof data.published === "boolean") {
         post.published = data.published;
+
+        if (originalPost.published && !post.published) {
+          pubsub.publish("post", {
+            post: {
+              mutation: "DELETED",
+              data: originalPost,
+            },
+          });
+        } else if (!originalPost.published && post.published) {
+          pubsub.publish("post", {
+            post: {
+              mutation: "CREATED",
+              data: post,
+            },
+          });
+        } else if (originalPost.published && post.published) {
+          pubsub.publish("post", {
+            post: {
+              mutation: "UPDATED",
+              data: post,
+            },
+          });
+        }
+      } else if (post.published) {
+        pubsub.publish("post", {
+          post: {
+            mutation: "UPDATED",
+            data: post,
+          },
+        });
       }
 
       return post;
     },
 
-    deletePost: (parent, { id }, { db }, info) => {
+    deletePost: (parent, { id }, { db, pubsub }, info) => {
       const post = db.postsData.find((p) => p.id === id);
       if (!post) {
         throw new Error("post does not exist!");
@@ -146,6 +185,15 @@ const resolvers = {
       db.commentsData = db.commentsData.filter(
         (comment) => comment.postId !== id
       );
+
+      if (post.published) {
+        pubsub.publish("post", {
+          post: {
+            mutation: "DELETED",
+            data: post,
+          },
+        });
+      }
 
       return post;
     },
@@ -194,18 +242,6 @@ const resolvers = {
   },
 
   Subscription: {
-    count: {
-      subscribe: (parent, args, { db, pubsub }, info) => {
-        let count = 0;
-        setInterval(() => {
-          count++;
-          pubsub.publish("count", { count });
-        }, 1000);
-
-        return pubsub.asyncIterator("count");
-      },
-    },
-
     comment: {
       subscribe: (parent, { postId }, { db, pubsub }, info) => {
         const post = db.postsData.find((p) => p.id === postId && p.published);
@@ -215,6 +251,12 @@ const resolvers = {
         }
 
         return pubsub.asyncIterator(`comment ${postId}`);
+      },
+    },
+
+    post: {
+      subscribe: (parent, args, { pubsub }, info) => {
+        return pubsub.asyncIterator("post");
       },
     },
   },

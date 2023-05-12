@@ -20,8 +20,8 @@ const typeDefs = `#graphql
   }
 
   type Subscription {
-    count: Int!
     comment(postId: ID!): Comment!
+    post: PostSubscriptionPayload!
   }
 
   input CreateUserInput {
@@ -82,6 +82,11 @@ const typeDefs = `#graphql
     text: String
     author: User!
     postId: Post!
+  }
+
+  type PostSubscriptionPayload {
+    mutation: String!
+    data: Post!
   }
 `;
 
