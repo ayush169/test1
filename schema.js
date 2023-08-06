@@ -2,7 +2,7 @@ const typeDefs = `#graphql
   type Query {
     me: User!
     post: Post!
-    users(query: String): [User!]!
+    users: [User!]!
     posts(query: String): [Post]!
     comments: [Comment]!
   }
@@ -20,8 +20,9 @@ const typeDefs = `#graphql
   }
 
   type Subscription {
-    comment(postId: ID!): Comment!
+    comment: CommentSubscriptionPayload!
     post: PostSubscriptionPayload!
+    user: User!
   }
 
   input CreateUserInput {
@@ -84,9 +85,20 @@ const typeDefs = `#graphql
     postId: Post!
   }
 
+  enum MutationType {
+    CREATED
+    UPDATED
+    DELETED
+  }
+
   type PostSubscriptionPayload {
-    mutation: String!
+    mutation: MutationType!
     data: Post!
+  }
+
+  type CommentSubscriptionPayload {
+    mutation: MutationType!
+    data: Comment!
   }
 `;
 

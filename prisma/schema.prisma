@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// datasource db {
+//     provider = "postgresql"
+//     url      = "postgres://msdbdros:uT1ofnKdL4WXlVxKrfgNO83jHKyg_qzV@mahmud.db.elephantsql.com/msdbdros"
+// }
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://ayush:ayush@localhost:5432/office"
+}
+
+model User {
+  id       String    @id @default(uuid()) @db.Uuid
+  name     String    @db.VarChar(255)
+  email    String    @db.VarChar(255)
+  age      Int?
+  posts    Post[]    @relation("AuthorToPosts")
+  comments Comment[] @relation("AuthorToComments")
+}
+
+model Post {
+  id        String    @id @default(uuid()) @db.Uuid
+  title     String    @db.VarChar(255)
+  body      String    @db.VarChar(255)
+  published Boolean
+  authorId  String    @db.Uuid
+  author    User      @relation("AuthorToPosts", fields: [authorId], references: [id], onDelete: Cascade)
+  comments  Comment[] @relation("PostToComments")
+}
+
+model Comment {
+  id       String  @id @default(uuid()) @db.Uuid
+  text     String? @db.VarChar(255)
+  authorId String  @db.Uuid
+  author   User    @relation("AuthorToComments", fields: [authorId], references: [id], onDelete: Cascade)
+  postId   String  @db.Uuid
+  post     Post    @relation("PostToComments", fields: [postId], references: [id], onDelete: Cascade)
+}

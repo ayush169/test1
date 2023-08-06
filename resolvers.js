@@ -1,43 +1,58 @@
 import { v4 as uuidv4 } from "uuid";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 const resolvers = {
   Query: {
-    me: (parent, args, { db }, info) => {
-      return {
-        id: "0",
-        name: "ayush",
-        email: "ayush@a.com",
-        posts: db.postsData.filter((p) => p.author == "0"),
-      };
+    me: async (parent, args, ctx, info) => {
+      const user = await prisma.user.create({
+        data: {
+          name: "Aryan Dubey",
+          email: "aryan@example.com",
+          age: 39,
+        },
+      });
+      return user;
     },
-    post: (parent, args, { db }, info) => {
-      return {
-        id: "13",
-        title: "Programming Games",
-        body: "",
-        published: false,
-        author: db.usersData[1],
-      };
+    post: async (parent, args, ctx, info) => {
+      const myPost = await prisma.post.create({
+        data: {
+          title: `my post ${Math.floor(Math.random() * 1000)}`,
+          body: `my post body ${Math.floor(Math.random() * 1000)}`,
+          published: true,
+          authorId: "6536b197-1222-4ea5-b4a8-1d6d087d3597",
+        },
+      });
+      return myPost;
     },
-    posts: (p, { query }, { db }, i) => {
+    posts: async (p, { query }, ctx, i) => {
       if (!query) {
-        return db.postsData;
+        // return db.postsData;
+        return await prisma.post.findMany();
       }
-      return db.postsData.filter((post) => post.id !== query);
+      const postsData = await prisma.post.findMany({
+        where: {
+          authorId: query,
+        },
+      });
+      return postsData;
     },
-    users: (p, { query }, { db }, i) => {
-      if (!query) {
-        return db.usersData;
-      }
-      return db.usersData.filter((u) =>
-        u.name.toLowerCase().includes(query.toLowerCase())
-      );
+    users: async (p, args, ctx, i) => {
+      return await prisma.user.findMany();
     },
-    comments: (p, args, { db }, i) => db.commentsData,
+    comments: async (p, args, ctx, i) => {
+      return await prisma.comment.findMany();
+    },
   },
   Mutation: {
-    createUser: (parent, { data }, { db }, info) => {
-      const emailTaken = db.usersData.some((u) => u.email === data.email);
+    createUser: async (parent, { data }, { pubsub }, info) => {
+      // const emailTaken = db.usersData.some((u) => u.email === data.email);
+      const emailTaken = await prisma.user.findFirst({
+        where: {
+          email: data.email,
+        },
+      });
       if (emailTaken) {
         throw new Error("Email already taken");
       }
@@ -46,61 +61,69 @@ const resolvers = {
         ...data,
       };
 
-      db.usersData.push(user);
-      return user;
+      // db.usersData.push(user);
+      const newUser = await prisma.user.create({
+        data: user,
+      });
+      // pubsub.publish("user", { user: newUser });
+
+      return newUser;
     },
 
-    updateUser: (p, { id, data }, { db }, info) => {
-      const user = db.usersData.find((u) => u.id === id);
+    updateUser: async (p, { id, data }, { db }, info) => {
+      const user = await prisma.user.findUnique({
+        where: {
+          id,
+        },
+      });
       if (!user) {
         throw new Error("user does not exist!");
       }
 
       if (typeof data.email === "string") {
-        const emailTaken = db.usersData.some((u) => u.email === user.email);
+        const emailTaken = await prisma.user.findFirst({
+          where: { email: data.email },
+        });
         if (emailTaken) {
           throw new Error("Email already taken");
         }
-
-        user.email = data.email;
       }
 
-      if (typeof data.name === "string") {
-        user.name = data.name;
-      }
-
-      if (typeof data.age !== "undefined") {
-        user.age = data.age;
-      }
-
-      return user;
+      const updatedUser = await prisma.user.update({
+        where: {
+          id,
+        },
+        data,
+      });
+      return updatedUser;
     },
 
-    deleteUser: (parent, { id }, { db }, info) => {
-      const userIndex = db.usersData.findIndex((u) => u.id === id);
-
-      if (userIndex === -1) {
-        throw new Error("user does not exist");
-      }
-
-      const deletedUsers = db.usersData.splice(userIndex, 1);
-
-      db.postsData = db.postsData.filter((post) => {
-        const match = post.author === id;
-
-        if (match) {
-          db.commentsData = db.commentsData.filter(
-            (comment) => comment.postId !== post.id
-          );
-        }
-        return !match;
+    deleteUser: async (parent, { id }, ctx, info) => {
+      const user = await prisma.user.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          posts: true,
+          comments: true,
+        },
       });
 
-      db.commentsData = db.commentsData.filter(
-        (comment) => comment.author !== id
-      );
+      console.log(user);
 
-      return deletedUsers[0];
+      if (!user) {
+        // If user is not found, throw an error
+        throw new Error("User does not exist");
+      }
+
+      // Delete the user
+      const deletedUser = await prisma.user.delete({
+        where: {
+          id,
+        },
+      });
+
+      return user;
     },
 
     createPost: (parent, { data }, { db, pubsub }, info) => {
@@ -212,11 +235,22 @@ const resolvers = {
         ...data,
       };
       db.commentsData.push(comment);
-      pubsub.publish(`comment ${data.post}`, { comment });
+      // pubsub.publish(`comment ${data.post}`, {
+      //   comment: {
+      //     mutation: "CREATED",
+      //     data: comment,
+      //   },
+      // });
+      pubsub.publish(`comment`, {
+        comment: {
+          mutation: "CREATED",
+          data: comment,
+        },
+      });
       return comment;
     },
 
-    updateComment: (parent, { id, data }, { db }, info) => {
+    updateComment: (parent, { id, data }, { db, pubsub }, info) => {
       const comment = db.commentsData.find((c) => c.id === id);
       if (!comment) {
         throw new Error("comment does not exist!");
@@ -226,33 +260,67 @@ const resolvers = {
         comment.text = data.text;
       }
 
+      pubsub.publish(`comment`, {
+        comment: {
+          mutation: "UPDATED",
+          data: comment,
+        },
+      });
+      // pubsub.publish(`comment ${comment.postId}`, {
+      //   comment: {
+      //     mutation: "UPDATED",
+      //     data: comment,
+      //   },
+      // });
+
       return comment;
     },
 
-    deleteComment: (parent, { id }, { db }, info) => {
+    deleteComment: (parent, { id }, { db, pubsub }, info) => {
       const comment = db.commentsData.find((c) => c.id === id);
       if (!comment) {
         throw new Error("comment does not exist!");
       }
 
       db.commentsData = db.commentsData.filter((comment) => comment.id !== id);
-
+      pubsub.publish(`comment`, {
+        comment: {
+          mutation: "DELETED",
+          data: comment,
+        },
+      });
+      // pubsub.publish(`comment ${comment.postId}`, {
+      //   comment: {
+      //     mutation: "DELETED",
+      //     data: comment,
+      //   },
+      // });
       return comment;
     },
   },
 
   Subscription: {
     comment: {
-      subscribe: (parent, { postId }, { db, pubsub }, info) => {
-        const post = db.postsData.find((p) => p.id === postId && p.published);
-
-        if (!post) {
-          throw new Error("Post not found");
-        }
-
-        return pubsub.asyncIterator(`comment ${postId}`);
+      subscribe: (parent, args, { db, pubsub }, info) => {
+        return pubsub.asyncIterator(`comment`);
       },
     },
+    user: {
+      subscribe: (parent, args, { db, pubsub }, info) => {
+        return pubsub.asyncIterator(`user`);
+      },
+    },
+    // comment: {
+    //   subscribe: (parent, { postId }, { db, pubsub }, info) => {
+    //     const post = db.postsData.find((p) => p.id === postId && p.published);
+
+    //     if (!post) {
+    //       throw new Error("Post not found");
+    //     }
+
+    //     return pubsub.asyncIterator(`comment ${postId}`);
+    //   },
+    // },
 
     post: {
       subscribe: (parent, args, { pubsub }, info) => {
@@ -262,27 +330,59 @@ const resolvers = {
   },
 
   Post: {
-    author: (parent, args, { db }, info) => {
-      return db.usersData.find((u) => u.id === parent.author);
+    author: async (parent, args, { db }, info) => {
+      const user = await prisma.user.findUnique({
+        where: {
+          id: parent.authorId,
+        },
+      });
+      return user;
     },
-    comments: (parent, args, { db }, info) => {
-      return db.commentsData.filter((c) => c.postId === parent.id);
+    comments: async (parent, args, { db }, info) => {
+      // return db.commentsData.filter((c) => c.postId === parent.id);
+      const commentsData = await prisma.comment.findMany({
+        where: {
+          postId: parent.id,
+        },
+      });
     },
   },
   User: {
-    posts: (parent, args, { db }, info) => {
-      return db.postsData.filter((p) => p.author === parent.id);
+    posts: async (parent, args, { db }, info) => {
+      // return db.postsData.filter((p) => p.author === parent.id);
+      const posts = await prisma.post.findMany({
+        where: {
+          authorId: parent.id,
+        },
+      });
+      return posts;
     },
-    comments: (parent, args, { db }, info) => {
-      return db.commentsData.filter((c) => c.author === parent.id);
+    comments: async (parent, args, { db }, info) => {
+      const commentsData = await prisma.comment.findMany({
+        where: {
+          authorId: parent.id,
+        },
+      });
+      return commentsData;
     },
   },
   Comment: {
-    author: (parent, args, { db }, info) => {
-      return db.usersData.find((u) => u.id === parent.author);
+    author: async (parent, args, { db }, info) => {
+      const user = await prisma.user.findUnique({
+        where: {
+          id: parent.authorId,
+        },
+      });
+
+      return user;
     },
-    postId: (parent, args, { db }, info) => {
-      return db.postsData.find((p) => p.id === parent.postId);
+    postId: async (parent, args, { db }, info) => {
+      const post = await prisma.post.findUnique({
+        where: {
+          id: parent.postId,
+        },
+      });
+      return post;
     },
   },
 };
