@@ -294,19 +294,27 @@ const resolvers = {
       return comment;
     },
 
-    deleteComment: (parent, { id }, { db, pubsub }, info) => {
-      const comment = db.commentsData.find((c) => c.id === id);
+    deleteComment: async (parent, { id }, { db, pubsub }, info) => {
+      const comment = await prisma.comment.findUnique({
+        where: {
+          id,
+        },
+      });
       if (!comment) {
         throw new Error("comment does not exist!");
       }
 
-      db.commentsData = db.commentsData.filter((comment) => comment.id !== id);
-      pubsub.publish(`comment`, {
-        comment: {
-          mutation: "DELETED",
-          data: comment,
+      await prisma.comment.delete({
+        where: {
+          id,
         },
       });
+      // pubsub.publish(`comment`, {
+      //   comment: {
+      //     mutation: "DELETED",
+      //     data: comment,
+      //   },
+      // });
       // pubsub.publish(`comment ${comment.postId}`, {
       //   comment: {
       //     mutation: "DELETED",
