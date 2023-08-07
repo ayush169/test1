@@ -41,7 +41,7 @@ const typeDefs = `#graphql
     title: String!
     body: String!
     published: Boolean!
-    author: ID!
+    authorId: ID!
   }
 
   input UpdatePostInput {
@@ -52,8 +52,8 @@ const typeDefs = `#graphql
 
   input CreateCommentInput {
     text: String!
-    author: ID!
-    post: ID!
+    authorId: ID!
+    postId: ID!
   }
 
   input UpdateCommentInput {
