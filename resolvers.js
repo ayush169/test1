@@ -28,7 +28,6 @@ const resolvers = {
     },
     posts: async (p, { query }, ctx, i) => {
       if (!query) {
-        // return db.postsData;
         return await prisma.post.findMany();
       }
       const postsData = await prisma.post.findMany({
@@ -47,7 +46,6 @@ const resolvers = {
   },
   Mutation: {
     createUser: async (parent, { data }, { pubsub }, info) => {
-      // const emailTaken = db.usersData.some((u) => u.email === data.email);
       const emailTaken = await prisma.user.findFirst({
         where: {
           email: data.email,
@@ -61,11 +59,9 @@ const resolvers = {
         ...data,
       };
 
-      // db.usersData.push(user);
       const newUser = await prisma.user.create({
         data: user,
       });
-      // pubsub.publish("user", { user: newUser });
 
       return newUser;
     },
@@ -79,15 +75,6 @@ const resolvers = {
       if (!user) {
         throw new Error("user does not exist!");
       }
-
-      // if (typeof data.email === "string") {
-      //   const emailTaken = await prisma.user.findFirst({
-      //     where: { email: data.email },
-      //   });
-      //   if (emailTaken) {
-      //     throw new Error("Email already taken");
-      //   }
-      // }
 
       const updatedUser = await prisma.user.update({
         where: {
@@ -109,15 +96,13 @@ const resolvers = {
         },
       });
 
-      // console.log(user);
-
       if (!user) {
         // If user is not found, throw an error
         throw new Error("User does not exist");
       }
 
       // Delete the user
-      const deletedUser = await prisma.user.delete({
+      await prisma.user.delete({
         where: {
           id,
         },
@@ -141,14 +126,14 @@ const resolvers = {
       const createdPost = await prisma.post.create({
         data: post,
       });
-      // if (data.published) {
-      //   pubsub.publish("post", {
-      //     post: {
-      //       mutation: "CREATED",
-      //       data: post,
-      //     },
-      //   });
-      // }
+      if (data.published) {
+        pubsub.publish("post", {
+          post: {
+            mutation: "CREATED",
+            data: post,
+          },
+        });
+      }
       return createdPost;
     },
 
@@ -166,36 +151,37 @@ const resolvers = {
         data,
       });
 
-      //   if (originalPost.published && !updatedPost.published) {
-      //     pubsub.publish("post", {
-      //       post: {
-      //         mutation: "DELETED",
-      //         data: originalPost,
-      //       },
-      //     });
-      //   } else if (!originalPost.published && post.published) {
-      //     pubsub.publish("post", {
-      //       post: {
-      //         mutation: "CREATED",
-      //         data: post,
-      //       },
-      //     });
-      //   } else if (originalPost.published && post.published) {
-      //     pubsub.publish("post", {
-      //       post: {
-      //         mutation: "UPDATED",
-      //         data: post,
-      //       },
-      //     });
-      //   }
-      // } else if (post.published) {
-      //   pubsub.publish("post", {
-      //     post: {
-      //       mutation: "UPDATED",
-      //       data: post,
-      //     },
-      //   });
-      // }
+      if (typeof data.published === "boolean") {
+        if (originalPost.published && !post.published) {
+          pubsub.publish("post", {
+            post: {
+              mutation: "DELETED",
+              data: originalPost,
+            },
+          });
+        } else if (!originalPost.published && post.published) {
+          pubsub.publish("post", {
+            post: {
+              mutation: "CREATED",
+              data: post,
+            },
+          });
+        } else if (originalPost.published && post.published) {
+          pubsub.publish("post", {
+            post: {
+              mutation: "UPDATED",
+              data: post,
+            },
+          });
+        }
+      } else if (post.published) {
+        pubsub.publish("post", {
+          post: {
+            mutation: "UPDATED",
+            data: post,
+          },
+        });
+      }
 
       return updatedPost;
     },
@@ -212,14 +198,14 @@ const resolvers = {
         where: { id },
       });
 
-      // if (post.published) {
-      //   pubsub.publish("post", {
-      //     post: {
-      //       mutation: "DELETED",
-      //       data: post,
-      //     },
-      //   });
-      // }
+      if (post.published) {
+        pubsub.publish("post", {
+          post: {
+            mutation: "DELETED",
+            data: post,
+          },
+        });
+      }
 
       return post;
     },
@@ -268,22 +254,25 @@ const resolvers = {
       return commentCreated;
     },
 
-    updateComment: (parent, { id, data }, { db, pubsub }, info) => {
-      const comment = db.commentsData.find((c) => c.id === id);
+    updateComment: async (parent, { id, data }, { db, pubsub }, info) => {
+      const comment = await prisma.comment.findUnique({
+        where: { id },
+      });
       if (!comment) {
         throw new Error("comment does not exist!");
       }
 
-      if (typeof data.text === "string") {
-        comment.text = data.text;
-      }
-
-      pubsub.publish(`comment`, {
-        comment: {
-          mutation: "UPDATED",
-          data: comment,
-        },
+      const updatedComment = await prisma.comment.update({
+        where: { id },
+        data,
       });
+
+      // pubsub.publish(`comment`, {
+      //   comment: {
+      //     mutation: "UPDATED",
+      //     data: comment,
+      //   },
+      // });
       // pubsub.publish(`comment ${comment.postId}`, {
       //   comment: {
       //     mutation: "UPDATED",
@@ -291,7 +280,7 @@ const resolvers = {
       //   },
       // });
 
-      return comment;
+      return updatedComment;
     },
 
     deleteComment: async (parent, { id }, { db, pubsub }, info) => {
@@ -331,11 +320,11 @@ const resolvers = {
         return pubsub.asyncIterator(`comment`);
       },
     },
-    user: {
-      subscribe: (parent, args, { db, pubsub }, info) => {
-        return pubsub.asyncIterator(`user`);
-      },
-    },
+    // user: {
+    //   subscribe: (parent, args, { db, pubsub }, info) => {
+    //     return pubsub.asyncIterator(`user`);
+    //   },
+    // },
     // comment: {
     //   subscribe: (parent, { postId }, { db, pubsub }, info) => {
     //     const post = db.postsData.find((p) => p.id === postId && p.published);
@@ -365,7 +354,6 @@ const resolvers = {
       return user;
     },
     comments: async (parent, args, { db }, info) => {
-      // return db.commentsData.filter((c) => c.postId === parent.id);
       const commentsData = await prisma.comment.findMany({
         where: {
           postId: parent.id,
@@ -376,7 +364,6 @@ const resolvers = {
   },
   User: {
     posts: async (parent, args, { db }, info) => {
-      // return db.postsData.filter((p) => p.author === parent.id);
       const posts = await prisma.post.findMany({
         where: {
           authorId: parent.id,
