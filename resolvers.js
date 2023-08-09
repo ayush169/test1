@@ -130,7 +130,7 @@ const resolvers = {
         pubsub.publish("post", {
           post: {
             mutation: "CREATED",
-            data: post,
+            data: createdPost,
           },
         });
       }
@@ -159,26 +159,26 @@ const resolvers = {
               data: originalPost,
             },
           });
-        } else if (!originalPost.published && post.published) {
+        } else if (!originalPost.published && updatedPost.published) {
           pubsub.publish("post", {
             post: {
               mutation: "CREATED",
-              data: post,
+              data: updatedPost,
             },
           });
-        } else if (originalPost.published && post.published) {
+        } else if (originalPost.published && updatedPost.published) {
           pubsub.publish("post", {
             post: {
               mutation: "UPDATED",
-              data: post,
+              data: updatedPost,
             },
           });
         }
-      } else if (post.published) {
+      } else if (updatedPost.published) {
         pubsub.publish("post", {
           post: {
             mutation: "UPDATED",
-            data: post,
+            data: updatedPost,
           },
         });
       }
@@ -245,12 +245,12 @@ const resolvers = {
       //     data: comment,
       //   },
       // });
-      // pubsub.publish(`comment`, {
-      //   comment: {
-      //     mutation: "CREATED",
-      //     data: comment,
-      //   },
-      // });
+      pubsub.publish(`comment`, {
+        comment: {
+          mutation: "CREATED",
+          data: commentCreated,
+        },
+      });
       return commentCreated;
     },
 
@@ -267,12 +267,12 @@ const resolvers = {
         data,
       });
 
-      // pubsub.publish(`comment`, {
-      //   comment: {
-      //     mutation: "UPDATED",
-      //     data: comment,
-      //   },
-      // });
+      pubsub.publish(`comment`, {
+        comment: {
+          mutation: "UPDATED",
+          data: updatedComment,
+        },
+      });
       // pubsub.publish(`comment ${comment.postId}`, {
       //   comment: {
       //     mutation: "UPDATED",
@@ -298,12 +298,12 @@ const resolvers = {
           id,
         },
       });
-      // pubsub.publish(`comment`, {
-      //   comment: {
-      //     mutation: "DELETED",
-      //     data: comment,
-      //   },
-      // });
+      pubsub.publish(`comment`, {
+        comment: {
+          mutation: "DELETED",
+          data: comment,
+        },
+      });
       // pubsub.publish(`comment ${comment.postId}`, {
       //   comment: {
       //     mutation: "DELETED",
